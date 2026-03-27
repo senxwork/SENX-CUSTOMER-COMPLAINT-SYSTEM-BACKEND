@@ -49,6 +49,12 @@ export class ComplaintSubTask {
   @UpdateDateColumn()
   updated_at: Date;
 
+  @Column({ type: 'timestamp', nullable: true })
+  completed_at: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  due_date: Date;
+
   @Column({ type: 'simple-json', nullable: true })
   tags: string[];
 

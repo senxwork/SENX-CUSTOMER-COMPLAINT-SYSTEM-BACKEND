@@ -11,7 +11,7 @@ services:
         command: npm run start:debug
         ports:
             - 8001:8001
-           
+
         networks:
             - nesjs-network
         volumes:
@@ -28,7 +28,7 @@ services:
         command: npm run start:prod
         ports:
             - 8004:8004
-           
+
         networks:
             - nesjs-network
         volumes:

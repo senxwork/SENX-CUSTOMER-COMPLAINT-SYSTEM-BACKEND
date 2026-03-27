@@ -79,17 +79,57 @@ export class ComplaintSubTaskService extends AbstractService {
     });
   }
 
+  /**
+   * ถ้า parent complaint ยังเป็น open → เปลี่ยนเป็น inprogress อัตโนมัติ
+   */
+  async autoSetParentInProgress(ticketId: string): Promise<void> {
+    try {
+      this.logger.log(`autoSetParentInProgress called with ticketId: ${ticketId}`);
+      const ticket = await this.subTaskRepository.findOne({
+        where: { id: ticketId },
+        relations: ['parent'],
+      });
+      this.logger.log(`autoSetParentInProgress: ticket found=${!!ticket}, parent=${!!ticket?.parent}, parentStatus=${ticket?.parent?.status}`);
+      if (ticket?.parent && ticket.parent.status === 'open') {
+        await this.complaintListRepository.update(
+          ticket.parent.complaint_id,
+          { status: 'inprogress' },
+        );
+        this.logger.log(`Auto set parent ${ticket.parent.complaint_id} to inprogress`);
+      }
+    } catch (err) {
+      this.logger.error(`autoSetParentInProgress failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * Override update: auto-set completed_at เมื่อเปลี่ยนสถานะเป็น completed/cancelled
+   * และ clear completed_at เมื่อเปลี่ยนกลับเป็น open/inprogress
+   */
+  async update(id: any, data: any): Promise<any> {
+    if (data.status === 'completed' || data.status === 'cancelled') {
+      data.completed_at = new Date();
+    } else if (data.status === 'open' || data.status === 'inprogress') {
+      data.completed_at = null;
+    }
+    return this.subTaskRepository.update(id, data);
+  }
+
   async createSubTask(data: any): Promise<ComplaintSubTask> {
     let retries = 3;
     while (retries > 0) {
       try {
         const ticketNumber = await this.generateTicketNumber();
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 15);
+
         const subTask = this.subTaskRepository.create({
           ticket_number: ticketNumber,
           ticket_detail: data.ticket_detail,
           ticket_sub_category: data.ticket_sub_category || null,
           status: data.status || 'open',
           tags: data.tags || null,
+          due_date: dueDate,
         });
 
         const savedSubTask = await this.subTaskRepository.save(subTask);
@@ -110,6 +150,17 @@ export class ComplaintSubTaskService extends AbstractService {
         throw error;
       }
     }
+  }
+
+  /**
+   * Backfill due_date สำหรับ ticket เก่าที่ยังไม่มี due_date
+   * due_date = created_at + 15 วัน
+   */
+  async backfillDueDate(): Promise<{ updated: number }> {
+    const result = await this.subTaskRepository.query(
+      `UPDATE "complaint-sub-tasks" SET "due_date" = "created_at" + INTERVAL '15 days' WHERE "due_date" IS NULL`,
+    );
+    return { updated: result?.[1] || 0 };
   }
 
   async deleteSubTask(id: string): Promise<any> {
@@ -255,8 +306,8 @@ export class ComplaintSubTaskService extends AbstractService {
       }
 
       // ดึง API config จาก settings
-      const apiUrl = await this.systemSettingsService.get('repair_api_url');
-      const apiToken = await this.systemSettingsService.get('repair_api_token');
+      const apiUrl = (await this.systemSettingsService.get('repair_api_url'))?.trim();
+      const apiToken = (await this.systemSettingsService.get('repair_api_token'))?.trim();
 
       if (!apiUrl || !apiToken) {
         this.logger.warn('checkAndSendRepairRequest: Repair API not configured (repair_api_url or repair_api_token missing)');
@@ -282,7 +333,7 @@ export class ComplaintSubTaskService extends AbstractService {
             locationName: project?.project_name_th || '',
             projectID: project?.project_id || '',
           },
-          issueDescription: `CUSTOMER COMPLAINT CENTER : ${ticket.ticket_detail || ''}`,
+          issueDescription: `${ticket.ticket_detail || ''}\nสร้างโดย : CUSTOMER COMPLAINT CENTER`,
           name: ticket.parent?.customer_name || '',
           tel: ticket.parent?.telephone || '',
           isUrgent: ticket.urgent || false,
@@ -291,7 +342,8 @@ export class ComplaintSubTaskService extends AbstractService {
 
       // ใช้ URL จาก settings ตรงๆ (user ใส่ URL เต็มสำหรับ POST)
       postUrl = apiUrl;
-      this.logger.log(`checkAndSendRepairRequest: POST ${postUrl}`);
+      this.logger.log(`checkAndSendRepairRequest: POST URL="${postUrl}" (len=${postUrl.length})`);
+      this.logger.log(`checkAndSendRepairRequest: Token length=${apiToken.length}, starts="${apiToken.substring(0, 10)}..."`);
       this.logger.log(`checkAndSendRepairRequest: Body = ${JSON.stringify(body)}`);
 
       // ใช้ axios ตรงๆ แทน HttpService
@@ -300,6 +352,7 @@ export class ComplaintSubTaskService extends AbstractService {
           'Authorization': `Bearer ${apiToken}`,
           'Content-Type': 'application/json',
         },
+        timeout: 30000,
       });
 
       const result = response.data;
@@ -326,6 +379,44 @@ export class ComplaintSubTaskService extends AbstractService {
       this.logger.error(`Response data: ${JSON.stringify(error.response?.data)}`);
       return { error: true, message: error.message };
     }
+  }
+
+  /**
+   * ดึงรายละเอียด repair request จาก Smartify API แบบ batch
+   * รับ array ของ { ticketId, repair_request_id } แล้วดึงข้อมูลทั้งหมดพร้อมกัน
+   */
+  async getRepairRequestDetailsBatch(
+    tickets: { ticketId: string; repair_request_id: number }[],
+  ): Promise<Map<string, any>> {
+    const result = new Map<string, any>();
+    if (!tickets.length) return result;
+
+    const apiGetUrl = await this.systemSettingsService.get('repair_api_get_url');
+    const apiToken = await this.systemSettingsService.get('repair_api_token');
+
+    if (!apiGetUrl || !apiToken) return result;
+
+    // ดึงข้อมูลพร้อมกัน (concurrent) แต่จำกัด batch ละ 10
+    const batchSize = 10;
+    for (let i = 0; i < tickets.length; i += batchSize) {
+      const batch = tickets.slice(i, i + batchSize);
+      const promises = batch.map(async (t) => {
+        try {
+          const getUrl = apiGetUrl.trim().replace('{id}', String(t.repair_request_id));
+          const response = await axios.get(getUrl, {
+            headers: { Authorization: `Bearer ${apiToken}` },
+            timeout: 10000,
+          });
+          result.set(t.ticketId, response.data);
+        } catch (err) {
+          this.logger.warn(`getRepairRequestDetailsBatch: failed for ticket ${t.ticketId}: ${err.message}`);
+          result.set(t.ticketId, null);
+        }
+      });
+      await Promise.all(promises);
+    }
+
+    return result;
   }
 
   /**

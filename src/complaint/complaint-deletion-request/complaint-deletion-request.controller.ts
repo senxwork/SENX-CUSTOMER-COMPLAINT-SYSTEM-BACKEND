@@ -26,20 +26,21 @@ export class ComplaintDeletionRequestController {
 
             }
 
-            this.mailerService.sendMail({
-                to: this.emailList, // List of receivers email address
-                from: '"Sen X Online System" <victorymanagement.cloud@gmail.com>', // Senders email address
-                subject: 'แจ้งเตือนขอลบข้อมูล',
-                template: 'deleteReqeus', // The `.pug` or `.hbs` extension is appended automatically.
-                context: {  // Data to be sent to template engine.
-                    dataBody: body
-                },
-            }).then((success) => {
-                console.log(success)
-            })
-                .catch((err) => {
-                    console.log(err)
-                });
+            // ปิดการส่ง Email แจ้งเตือนขอลบข้อมูล
+            // this.mailerService.sendMail({
+            //     to: this.emailList,
+            //     from: '"Sen X Online System" <victorymanagement.cloud@gmail.com>',
+            //     subject: 'แจ้งเตือนขอลบข้อมูล',
+            //     template: 'deleteReqeus',
+            //     context: {
+            //         dataBody: body
+            //     },
+            // }).then((success) => {
+            //     console.log(success)
+            // })
+            //     .catch((err) => {
+            //         console.log(err)
+            //     });
         } catch (error) {
 
         }

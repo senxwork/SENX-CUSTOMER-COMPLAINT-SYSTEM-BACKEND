@@ -15,13 +15,13 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:4200',
-      'https://css.senxgroup.com',
+     'https://css.senxgroup.com',
 
     ],
     credentials: true
   });
   const config = new DocumentBuilder()
-    .setTitle('Customer Service Software API')
+    .setTitle('Customer Service Software API UAT')
     .setDescription('API description')
     .setVersion('1.0')
     .addTag('Customer Service Software API')

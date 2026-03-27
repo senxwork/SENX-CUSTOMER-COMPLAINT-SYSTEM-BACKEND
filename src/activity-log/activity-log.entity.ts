@@ -10,10 +10,10 @@ export class ActivityLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   complaint_id: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   sub_task_id: string;
 
   @Column()

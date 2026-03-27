@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { PublicTicketAccess } from './public-ticket-access.entity';
 import { ComplaintSubTask } from '../complaint-sub-task/complaint-sub-task.entity';
 import { ComplaintSubTaskTransaction } from '../complaint-sub-task-transaction/complaint-sub-task-transaction.entity';
+import { ComplaintList } from '../complaint-list/complaint-list.entity';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -15,6 +16,8 @@ export class PublicTicketAccessService {
     private readonly subTaskRepository: Repository<ComplaintSubTask>,
     @InjectRepository(ComplaintSubTaskTransaction)
     private readonly transactionRepository: Repository<ComplaintSubTaskTransaction>,
+    @InjectRepository(ComplaintList)
+    private readonly complaintListRepository: Repository<ComplaintList>,
   ) {}
 
   async createAccess(
@@ -132,6 +135,20 @@ export class PublicTicketAccessService {
     }
 
     await this.subTaskRepository.update(access.subTask.id, { status });
+
+    // อัพเดตสถานะ Case เป็น inprogress อัตโนมัติ เมื่อ Ticket เปลี่ยนเป็น inprogress
+    if (status === 'inprogress') {
+      const ticket = await this.subTaskRepository.findOne({
+        where: { id: access.subTask.id },
+        relations: ['parent'],
+      });
+      if (ticket?.parent && ticket.parent.status === 'open') {
+        await this.complaintListRepository.update(
+          ticket.parent.complaint_id,
+          { status: 'inprogress' },
+        );
+      }
+    }
 
     // Add a transaction log for the status change
     const statusLabels = {

@@ -5,6 +5,7 @@ import { PublicTicketAccessController } from './public-ticket-access.controller'
 import { PublicTicketAccessService } from './public-ticket-access.service';
 import { ComplaintSubTask } from '../complaint-sub-task/complaint-sub-task.entity';
 import { ComplaintSubTaskTransaction } from '../complaint-sub-task-transaction/complaint-sub-task-transaction.entity';
+import { ComplaintList } from '../complaint-list/complaint-list.entity';
 import { ActivityLogModule } from '../../activity-log/activity-log.module';
 
 @Module({
@@ -13,6 +14,7 @@ import { ActivityLogModule } from '../../activity-log/activity-log.module';
       PublicTicketAccess,
       ComplaintSubTask,
       ComplaintSubTaskTransaction,
+      ComplaintList,
     ]),
     ActivityLogModule,
   ],

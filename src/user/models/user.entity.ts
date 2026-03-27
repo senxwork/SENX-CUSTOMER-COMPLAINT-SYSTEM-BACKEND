@@ -22,7 +22,6 @@ import { JobDepartment } from 'src/job-department/job-department.entity';
 export class User {
   @PrimaryGeneratedColumn('uuid')
   user_id: number;
-
   @Column()
   first_name_last_name: string;
   @Column({ unique: true })
@@ -38,7 +37,7 @@ export class User {
   @Column()
   @Exclude()
   password: string;
-  @Column()
+  @Column({ type: 'uuid', nullable: true })
   department: string;
   @Column({ default: false })
   line_user_status: boolean;

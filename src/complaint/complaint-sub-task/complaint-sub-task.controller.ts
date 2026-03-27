@@ -21,6 +21,19 @@ export class ComplaintSubTaskController {
   private readonly logger = new Logger(ComplaintSubTaskController.name);
   private readonly FRONTEND_URL = 'https://css.senxgroup.com';
 
+  /**
+   * Format date เป็น "DD เดือน พ.ศ." เช่น "1 เมษายน 2569"
+   */
+  private formatThaiDate(date: Date): string {
+    if (!date) return '-';
+    const d = new Date(date);
+    const thaiMonths = [
+      'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+      'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
+    ];
+    return `${d.getDate()} ${thaiMonths[d.getMonth()]} ${d.getFullYear() + 543}`;
+  }
+
   constructor(
     private readonly subTaskService: ComplaintSubTaskService,
     private readonly mailerService: MailerService,
@@ -29,6 +42,11 @@ export class ComplaintSubTaskController {
     private readonly departmentRepository: Repository<Department>,
     private readonly activityLogService: ActivityLogService,
   ) {}
+
+  @Post('backfill-due-date')
+  async backfillDueDate() {
+    return this.subTaskService.backfillDueDate();
+  }
 
   @Post('ai-generate')
   async aiGenerate(
@@ -167,12 +185,15 @@ export class ComplaintSubTaskController {
 
           await this.mailerService.sendMail({
             to: contact.email,
-            subject: `[Ticket ${ticket.ticket_number}] มีการมอบหมายงานใหม่`,
+            subject: `แจ้งเรื่องร้องเรียนโครงการ ${ticket.parent?.project?.project_name_th || '-'}${ticket.parent?.customer_name ? ' จาก ' + ticket.parent.customer_name : ''}`,
             template: 'assignDepartmentTicket',
             context: {
               dataBody: {
                 ticket_number: ticket.ticket_number,
                 ticket_detail: ticket.ticket_detail,
+                project_name: ticket.parent?.project?.project_name_th || '-',
+                customer_name: ticket.parent?.customer_name || '-',
+                house_name: ticket.parent?.house_name || '-',
                 department_name: department.department_name,
                 category: ticket.ticketCategory?.category_name || '-',
                 status: ticket.status,
@@ -180,6 +201,7 @@ export class ComplaintSubTaskController {
                 statusBgColor: statusInfo.bg,
                 statusTextColor: statusInfo.color,
                 urgent: ticket.urgent,
+                due_date: this.formatThaiDate(ticket.due_date),
                 contact_name: contact.name,
                 public_url: publicUrl,
               },
@@ -301,6 +323,9 @@ export class ComplaintSubTaskController {
     const { performed_by, ...updateData } = body;
     const result = await this.subTaskService.update(id, updateData);
 
+    // ดึง ticket_number สำหรับ Activity Log
+    const ticket = await this.subTaskService.findOneWithTransactions(id);
+
     // Activity Log - generate detailed description
     const statusLabels = { open: 'Open', inprogress: 'กำลังดำเนินการ', completed: 'เสร็จสิ้น', cancelled: 'ยกเลิก' };
     const details: string[] = [];
@@ -318,8 +343,59 @@ export class ComplaintSubTaskController {
       action_type: updateData.status ? 'UPDATE_TICKET_STATUS' : 'UPDATE_TICKET',
       action_detail: actionDetail,
       performed_by: performed_by || null,
+      ref_number: ticket?.ticket_number || null,
       metadata: updateData,
     });
+
+    // อัพเดตสถานะ Case เป็น inprogress อัตโนมัติ เมื่อ Ticket เปลี่ยนเป็น inprogress
+    if (updateData.status === 'inprogress') {
+      await this.subTaskService.autoSetParentInProgress(id);
+    }
+
+    // ส่ง Email แจ้งปิดงานให้หน่วยงานภายนอก เมื่อสถานะเปลี่ยนเป็น completed
+    if (updateData.status === 'completed' && ticket?.department) {
+      try {
+        const department = await this.departmentRepository.findOne({
+          where: { id: ticket.department.id },
+        });
+
+        if (department?.contacts?.length > 0) {
+          const contactsWithEmail = department.contacts.filter((c) => c.email);
+
+          for (const contact of contactsWithEmail) {
+            const access = await this.publicTicketAccessService.createAccess(
+              id,
+              contact.name,
+              contact.email,
+            );
+            const publicUrl = `${this.FRONTEND_URL}/public/ticket/${access.token}`;
+
+            await this.mailerService.sendMail({
+              to: contact.email,
+              subject: `แจ้งปิดงาน Ticket ${ticket.ticket_number}`,
+              template: 'closeTicket',
+              context: {
+                dataBody: {
+                  ticket_number: ticket.ticket_number,
+                  ticket_detail: ticket.ticket_detail,
+                  department_name: department.department_name,
+                  category: ticket.ticketCategory?.category_name || '-',
+                  due_date: this.formatThaiDate(ticket.due_date),
+                  contact_name: contact.name,
+                  public_url: publicUrl,
+                },
+              },
+            });
+
+            this.logger.log(
+              `Close-ticket email sent to ${contact.email} for ticket ${ticket.ticket_number}`,
+            );
+          }
+        }
+      } catch (error) {
+        this.logger.error(`Failed to send close-ticket email: ${error.message}`);
+      }
+    }
 
     return result;
   }

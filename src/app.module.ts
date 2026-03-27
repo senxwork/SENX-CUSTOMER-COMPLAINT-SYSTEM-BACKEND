@@ -1,4 +1,5 @@
 import { MiddlewareConsumer, Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UserModule } from './user/user.module';
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from './auth/auth.module';
@@ -43,46 +44,43 @@ import { AuthMiddleware } from './middleware/auth.middleware';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
     UserModule,
-    MailerModule.forRoot({
-      transport: {
-        service: 'gmail',
-        auth: {
-          user: 'complaint.center.notification@gmail.com',
-          pass: 'bekw fapq elma upzl'
-        }
-      },
-      defaults: {
-        from: '"CUSTOMER COMPLAINT CENTER" <complaint.center.notification@gmail.com>',
-      },
-      template: {
-        dir: process.cwd() + '/template/',
-        adapter: new HandlebarsAdapter(),
-        options: {
-          strict: true,
+    MailerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        transport: {
+          service: config.get('MAIL_SERVICE', 'gmail'),
+          auth: {
+            user: config.get('MAIL_USER'),
+            pass: config.get('MAIL_PASS'),
+          },
         },
-      },
+        defaults: {
+          from: config.get('MAIL_FROM'),
+        },
+        template: {
+          dir: process.cwd() + '/template/',
+          adapter: new HandlebarsAdapter(),
+          options: {
+            strict: true,
+          },
+        },
+      }),
     }),
-   TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: 'postgres',
-       database: 'customer_service_db_last',
-      autoLoadEntities: true,
-      synchronize: true, // TEMPORARY: Run migration-followup-to-complaint.sql first, then set back to true
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres' as const,
+        host: config.get<string>('DB_HOST', 'localhost'),
+        port: parseInt(config.get<string>('DB_PORT', '5432')),
+        username: config.get<string>('DB_USERNAME', 'postgres'),
+        password: config.get<string>('DB_PASSWORD', ''),
+        database: config.get<string>('DB_DATABASE', ''),
+        autoLoadEntities: true,
+        synchronize: config.get<string>('DB_SYNCHRONIZE', 'true') === 'true',
+      }),
     }),
-   /*   TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: '172.18.0.2',
-      port: 5432,
-      username: 'root',
-      password: '2023@Rasa',
-      database: 'costomer_complant_center_db',
-      autoLoadEntities: true,
-      synchronize: true,
-    }), */
   
     AuthModule,
     CommonModule,

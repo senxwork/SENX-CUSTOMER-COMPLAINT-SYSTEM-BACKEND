@@ -85,42 +85,7 @@ async create(@Body() body: CreateComplaintListDto) {
         ref_number: caseNumber,
       });
 
-      if (this.dataRes.complaint_id && filterByEmail.length > 0) {
-        const complaint_id = this.dataRes.complaint_id;
-        const complaintData = await this.complaintService.findOne(
-          { complaint_id },
-          [
-            'user_created',
-            'jobDepartment',
-            'project',
-            'complaintJobCatagory',
-            'contactChannel',
-          ],
-        );
-        const emailList = [];
-        filterByEmail.forEach((element) => {
-          emailList.push(element.email);
-        });
-        console.log(emailList);
-        this.mailerService
-          .sendMail({
-            to: emailList,
-            from:
-              '"SENX CUSTOMER SERVICE SYSTEM" <victorymanagement.cloud@gmail.com>',
-            subject: 'มี แจ้งเรื่องร้องเรียน/ข้อเสนอแนะ ใหม่มาครับ ✔',
-            template: 'createComplaint',
-            context: {
-              dataRes: complaintData,
-              dataBody: complaintData,
-            },
-          })
-          .then((success) => {
-            console.log(success);
-          })
-          .catch((err) => {
-            console.log(err);
-          });
-      }
+      // ปิดการส่ง Email ตอนสร้าง Complaint ใหม่
     } catch (error) {
       console.log(error);
     }
@@ -183,48 +148,19 @@ async createByOther(@Body() body: CreateComplaintListDto) {
         ref_number: caseNumber,
       });
 
-      if (this.dataRes.complaint_id && filterByEmail.length > 0) {
-        const complaint_id = this.dataRes.complaint_id;
-        const complaintData = await this.complaintService.findOne(
-          { complaint_id },
-          [
-            'user_created',
-            'jobDepartment',
-            'project',
-            'complaintJobCatagory',
-            'contactChannel',
-          ],
-        );
-        const emailList = [];
-        filterByEmail.forEach((element) => {
-          emailList.push(element.email);
-        });
-        console.log(emailList);
-        this.mailerService
-          .sendMail({
-            to: emailList,
-            from:
-              '"SENX CUSTOMER SERVICE SYSTEM" <victorymanagement.cloud@gmail.com>',
-            subject: 'มี แจ้งเรื่องร้องเรียน/ข้อเสนอแนะ ใหม่มาครับ ✔',
-            template: 'createComplaint',
-            context: {
-              dataRes: complaintData,
-              dataBody: complaintData,
-            },
-          })
-          .then((success) => {
-            console.log(success);
-          })
-          .catch((err) => {
-            console.log(err);
-          });
-      }
+      // ปิดการส่ง Email ตอนสร้าง Complaint ใหม่ (create-by-other)
     } catch (error) {
       console.log(error);
     }
 
     return this.dataRes;
   }
+  // Dashboard API - returns ALL data: cases, tickets, transactions, files
+  @Get('dashboard')
+  async getDashboard() {
+    return this.complaintService.findAllForDashboard();
+  }
+
   // Optimized endpoint - returns complaints with sub-task data included
   @Get('with-subtasks')
   async getAllWithSubTasks() {
@@ -242,6 +178,7 @@ async createByOther(@Body() body: CreateComplaintListDto) {
     return this.complaintService.findOne({ complaint_id }, [
       'complaintJobCatagory',
       'complaintTransaction',
+      'complaintTransaction.user_created',
       'responsible_persons',
       'user_created',
       'jobDepartment',
@@ -286,28 +223,29 @@ async updateStatus(
           metadata: { new_status: body.status },
         });
 
-        console.log(complaint);
-        this.mailerService
-          .sendMail({
-            to: complaint.user_created?.email,
-            from:
-              '"SENX CUSTOMER SERVICE SYSTEM" <victorymanagement.cloud@gmail.com>',
-            subject:
-              'เรื่องร้องเรียน/ข้อเสนอแนะ มีการเปลี่ยนแปลงสถานะเป็น ' +
-              complaint.status +
-              '✔',
-            template: 'changeStatusComplaint',
-            context: {
-              dataRes: complaint,
-              dataBody: complaint,
-            },
-          })
-          .then((success) => {
-            console.log(success);
-          })
-          .catch((err) => {
-            console.log(err);
-          });
+        // ปิดการส่ง Email แจ้งเปลี่ยนสถานะ Complaint
+        // console.log(complaint);
+        // this.mailerService
+        //   .sendMail({
+        //     to: complaint.user_created?.email,
+        //     from:
+        //       '"SENX CUSTOMER SERVICE SYSTEM" <victorymanagement.cloud@gmail.com>',
+        //     subject:
+        //       'เรื่องร้องเรียน/ข้อเสนอแนะ มีการเปลี่ยนแปลงสถานะเป็น ' +
+        //       complaint.status +
+        //       '✔',
+        //     template: 'changeStatusComplaint',
+        //     context: {
+        //       dataRes: complaint,
+        //       dataBody: complaint,
+        //     },
+        //   })
+        //   .then((success) => {
+        //     console.log(success);
+        //   })
+        //   .catch((err) => {
+        //     console.log(err);
+        //   });
       })
       .catch((err) => {
         throw new HttpException(
@@ -428,30 +366,31 @@ async AssignWork(
         metadata: { responsible_persons: ids, names: emailListName },
       });
 
-      console.log(complaint.user_created?.email);
-      const name_assign = emailListName.toString();
-      if (resData.complaint_id) {
-        this.mailerService
-          .sendMail({
-            to: emailList,
-            from:
-              '"SENX CUSTOMER SERVICE SYSTEM" <victorymanagement.cloud@gmail.com>',
-            subject:
-              'มี เรื่องร้องเรียน/ข้อเสนอแนะt ที่คุณได้รับมอบหมายให้ดำเนินการครับ ✔',
-            template: 'assignComplaint',
-            context: {
-              dataRes: complaint,
-              dataBody: complaint,
-              name_assign: name_assign,
-            },
-          })
-          .then((success) => {
-            console.log(success);
-          })
-          .catch((err) => {
-            console.log(err);
-          });
-      }
+      // ปิดการส่ง Email แจ้งมอบหมายงาน Complaint
+      // console.log(complaint.user_created?.email);
+      // const name_assign = emailListName.toString();
+      // if (resData.complaint_id) {
+      //   this.mailerService
+      //     .sendMail({
+      //       to: emailList,
+      //       from:
+      //         '"SENX CUSTOMER SERVICE SYSTEM" <victorymanagement.cloud@gmail.com>',
+      //       subject:
+      //         'มี เรื่องร้องเรียน/ข้อเสนอแนะt ที่คุณได้รับมอบหมายให้ดำเนินการครับ ✔',
+      //       template: 'assignComplaint',
+      //       context: {
+      //         dataRes: complaint,
+      //         dataBody: complaint,
+      //         name_assign: name_assign,
+      //       },
+      //     })
+      //     .then((success) => {
+      //       console.log(success);
+      //     })
+      //     .catch((err) => {
+      //       console.log(err);
+      //     });
+      // }
     }
   }
 

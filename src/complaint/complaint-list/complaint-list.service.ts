@@ -1,15 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from "@nestjs/typeorm";
+import { ConfigService } from '@nestjs/config';
 import { Between, Repository } from "typeorm";
 import { AbstractService } from 'src/common/abstract.service';
 import { PaginatedResult } from 'src/common/paginated-result.interface';
 import { ComplaintList } from './complaint-list.entity';
+import { ComplaintSubTaskService } from '../complaint-sub-task/complaint-sub-task.service';
 
 
 @Injectable()
 export class ComplaintListService extends AbstractService {
     constructor(
-        @InjectRepository(ComplaintList) private readonly complaintListRepository: Repository<ComplaintList>
+        @InjectRepository(ComplaintList) private readonly complaintListRepository: Repository<ComplaintList>,
+        @Inject(forwardRef(() => ComplaintSubTaskService))
+        private readonly subTaskService: ComplaintSubTaskService,
+        private readonly configService: ConfigService,
     ) {
         super(complaintListRepository);
     }
@@ -88,6 +93,9 @@ export class ComplaintListService extends AbstractService {
       .leftJoinAndSelect(
         'complaint-lists.complaintTransaction',
         'complaintTransaction',
+      ).leftJoinAndSelect(
+        'complaintTransaction.user_created',
+        'transactionUserCreated',
       ).leftJoinAndSelect(
         'complaint-lists.omPersons',
         'omPersons',
@@ -308,6 +316,147 @@ export class ComplaintListService extends AbstractService {
         subTaskAssignees
       };
     });
+  }
+
+  // Dashboard API - get all complaints with ALL related data
+  async findAllForDashboard(): Promise<any> {
+    const data = await this.complaintListRepository
+      .createQueryBuilder('complaint')
+      // Case-level relations
+      .leftJoinAndSelect('complaint.complaintJobCatagory', 'complaintJobCatagory')
+      .leftJoinAndSelect('complaint.contactChannel', 'contactChannel')
+      .leftJoinAndSelect('complaint.businessUnit', 'businessUnit')
+      .leftJoinAndSelect('complaint.jobDepartment', 'jobDepartment')
+      .leftJoinAndSelect('complaint.user_created', 'user_created')
+      .leftJoinAndSelect('complaint.project', 'project')
+      .leftJoinAndSelect('complaint.responsible_persons', 'responsible_persons')
+      .leftJoinAndSelect('complaint.omPersons', 'omPersons')
+      .leftJoinAndSelect('complaint.complaintAttachedFile', 'complaintAttachedFile')
+      // Case transactions
+      .leftJoinAndSelect('complaint.complaintTransaction', 'complaintTransaction')
+      .leftJoinAndSelect('complaintTransaction.user_created', 'txUserCreated')
+      .leftJoinAndSelect('complaintTransaction.complaintTransactionAttachedFile', 'txAttachedFile')
+      // Sub-tasks (Tickets)
+      .leftJoinAndSelect('complaint.subTasks', 'subTasks')
+      .leftJoinAndSelect('subTasks.department', 'subTaskDepartment')
+      .leftJoinAndSelect('subTasks.ticketCategory', 'subTaskTicketCategory')
+      .leftJoinAndSelect('subTasks.ticketSubCategory', 'subTaskTicketSubCategory')
+      // Sub-task transactions
+      .leftJoinAndSelect('subTasks.subTaskTransactions', 'subTaskTransactions')
+      .leftJoinAndSelect('subTaskTransactions.user_created', 'stTxUserCreated')
+      .leftJoinAndSelect('subTaskTransactions.attachedFiles', 'stTxAttachedFiles')
+      .orderBy('complaint.created_at', 'DESC')
+      .addOrderBy('subTasks.created_at', 'ASC')
+      .addOrderBy('complaintTransaction.created_at', 'DESC')
+      .addOrderBy('subTaskTransactions.created_at', 'DESC')
+      .getMany();
+
+    // Add file URLs
+    const baseUrl = this.configService.get<string>('API_BASE_URL', '');
+    data.forEach((complaint: any) => {
+      // Case attached files
+      if (complaint.complaintAttachedFile) {
+        complaint.complaintAttachedFile.forEach((f: any) => {
+          f.file_url = `${baseUrl}/complaint-attachedfile/file/${f.file_name}`;
+        });
+      }
+      // Case transaction files
+      if (complaint.complaintTransaction) {
+        complaint.complaintTransaction.forEach((tx: any) => {
+          if (tx.complaintTransactionAttachedFile) {
+            tx.complaintTransactionAttachedFile.forEach((f: any) => {
+              f.file_url = `${baseUrl}/complaint-transaction-attachedfile/file/${f.file_name}`;
+            });
+          }
+        });
+      }
+      // Sub-task transaction files
+      if (complaint.subTasks) {
+        complaint.subTasks.forEach((st: any) => {
+          if (st.subTaskTransactions) {
+            st.subTaskTransactions.forEach((tx: any) => {
+              if (tx.attachedFiles) {
+                tx.attachedFiles.forEach((f: any) => {
+                  f.file_url = `${baseUrl}/complaint-sub-task-transection-file/file/${f.file_name}`;
+                });
+              }
+            });
+          }
+        });
+      }
+      // User profile images
+      if (complaint.user_created?.profile_image) {
+        complaint.user_created.profile_image_url = `${baseUrl}/users/file/${complaint.user_created.profile_image}`;
+      }
+    });
+
+    // Collect tickets that have repair_request_id for batch fetch
+    const repairTickets: { ticketId: string; repair_request_id: number }[] = [];
+    data.forEach((complaint: any) => {
+      if (complaint.subTasks && Array.isArray(complaint.subTasks)) {
+        complaint.subTasks.forEach((st: any) => {
+          if (st.repair_request_id) {
+            repairTickets.push({
+              ticketId: st.id,
+              repair_request_id: st.repair_request_id,
+            });
+          }
+        });
+      }
+    });
+
+    // Batch fetch repair details from WECARE API
+    const repairDetailsMap = await this.subTaskService.getRepairRequestDetailsBatch(repairTickets);
+
+    // Summary stats
+    const totalCases = data.length;
+    const statusCounts = { open: 0, inprogress: 0, completed: 0 };
+    let totalTickets = 0;
+    const ticketStatusCounts = { open: 0, inprogress: 0, completed: 0, resolved: 0 };
+    let totalRepairRequests = 0;
+    const repairStatusCounts: Record<string, number> = {};
+
+    data.forEach((complaint: any) => {
+      if (statusCounts[complaint.status] !== undefined) {
+        statusCounts[complaint.status]++;
+      }
+      if (complaint.subTasks && Array.isArray(complaint.subTasks)) {
+        totalTickets += complaint.subTasks.length;
+        complaint.subTasks.forEach((st: any) => {
+          if (ticketStatusCounts[st.status] !== undefined) {
+            ticketStatusCounts[st.status]++;
+          }
+
+          // Attach repair detail to sub-task & count stats
+          if (st.repair_request_id) {
+            totalRepairRequests++;
+            const detail = repairDetailsMap.get(st.id);
+            st.repairDetail = detail || null;
+
+            // Count repair statuses
+            const repairStatus = detail?.data?.attributes?.status;
+            if (repairStatus) {
+              const statuses = repairStatus.split(',').map((s: string) => s.trim());
+              statuses.forEach((s: string) => {
+                repairStatusCounts[s] = (repairStatusCounts[s] || 0) + 1;
+              });
+            }
+          }
+        });
+      }
+    });
+
+    return {
+      summary: {
+        totalCases,
+        caseStatusCounts: statusCounts,
+        totalTickets,
+        ticketStatusCounts,
+        totalRepairRequests,
+        repairStatusCounts,
+      },
+      data,
+    };
   }
 
   // Get complaints where any sub-task is assigned to the given department
