@@ -108,4 +108,21 @@ export class ComplaintSubTask {
 
   @Column({ nullable: true })
   expense_recorded_by: string;
+
+  // CCS specific fields
+  @Column({ type: 'boolean', nullable: true })
+  is_sena: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  asset_type: string;
+
+  @Column({ type: 'boolean', nullable: true })
+  warranty_status: boolean;
+
+  // Department assignment tracking (for reminder email)
+  @Column({ type: 'timestamp', nullable: true })
+  department_assigned_at: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  reminder_sent_at: Date;
 }

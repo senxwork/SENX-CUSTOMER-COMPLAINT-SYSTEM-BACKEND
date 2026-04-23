@@ -118,7 +118,10 @@ export class ComplaintListService extends AbstractService {
       .leftJoinAndSelect('subTasks.department', 'subTaskDepartment')
       .leftJoinAndSelect('subTasks.ticketCategory', 'subTaskTicketCategory')
       .leftJoinAndSelect('subTasks.ticketSubCategory', 'subTaskTicketSubCategory')
-      .orderBy('complaint-lists.created_at', 'DESC');
+      .leftJoinAndSelect('subTasks.subTaskTransactions', 'subTaskTransactions')
+      .leftJoinAndSelect('subTaskTransactions.user_created', 'stTxUserCreated')
+      .orderBy('complaint-lists.created_at', 'DESC')
+      .addOrderBy('subTaskTransactions.created_at', 'ASC');
     if (
       responsible_persons !== undefined &&
       (Array.isArray(responsible_persons)

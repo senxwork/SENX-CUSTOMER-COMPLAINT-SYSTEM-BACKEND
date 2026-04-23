@@ -130,6 +130,9 @@ export class ComplaintSubTaskService extends AbstractService {
           status: data.status || 'open',
           tags: data.tags || null,
           due_date: dueDate,
+          is_sena: typeof data.is_sena === 'boolean' ? data.is_sena : null,
+          asset_type: data.asset_type || null,
+          warranty_status: typeof data.warranty_status === 'boolean' ? data.warranty_status : null,
         });
 
         const savedSubTask = await this.subTaskRepository.save(subTask);
@@ -168,8 +171,11 @@ export class ComplaintSubTaskService extends AbstractService {
   }
 
   async updateDepartment(id: string, departmentId: string): Promise<any> {
+    // บันทึกเวลา assign เพื่อใช้ตรวจสอบ reminder 24 ชม. และ reset reminder_sent_at
     await this.subTaskRepository.query(
-      `UPDATE "complaint-sub-tasks" SET "department_id" = $1 WHERE "id" = $2`,
+      `UPDATE "complaint-sub-tasks"
+       SET "department_id" = $1, "department_assigned_at" = NOW(), "reminder_sent_at" = NULL
+       WHERE "id" = $2`,
       [departmentId, id]
     );
     return this.findOneWithTransactions(id);
@@ -225,6 +231,12 @@ export class ComplaintSubTaskService extends AbstractService {
           project_id: project?.project_id || '',
           project_name: project?.project_name_th || '',
           project_type: project?.project_type || '',
+          // CCS fields - ขอให้ AI เติมค่ามาด้วย
+          ccs_fields: {
+            is_sena: 'TRUE/FALSE - ระบุว่าเป็น SENA หรือไม่',
+            asset_type: 'TEXT - ประเภททรัพย์สิน',
+            warranty_status: 'TRUE/FALSE - สถานะการรับประกัน',
+          },
         })
         .pipe(map((res) => res.data))
         .toPromise();
@@ -241,6 +253,9 @@ export class ComplaintSubTaskService extends AbstractService {
             ticket_detail: task.ticket_detail,
             status: task.status || 'open',
             complaint_list_id: complaintId,
+            is_sena: this.parseBool(task.is_sena),
+            asset_type: task.asset_type || null,
+            warranty_status: this.parseBool(task.warranty_status),
           };
 
           const created = await this.createSubTask(data);
@@ -279,6 +294,12 @@ export class ComplaintSubTaskService extends AbstractService {
     }
   }
 
+  private parseBool(value: any): boolean | null {
+    if (value === true || value === 'true' || value === 'TRUE' || value === 1 || value === '1') return true;
+    if (value === false || value === 'false' || value === 'FALSE' || value === 0 || value === '0') return false;
+    return null;
+  }
+
   /**
    * ตรวจสอบว่า ticket มีหมวดหมู่ "แจ้งซ่อม" หรือไม่ ถ้าใช่ส่ง repair request ไป Smartify API
    * ใช้ axios ตรงๆ (ไม่ผ่าน @nestjs/axios HttpService) เพื่อให้ตรงกับ Postman
@@ -286,6 +307,7 @@ export class ComplaintSubTaskService extends AbstractService {
   async checkAndSendRepairRequest(ticketId: string): Promise<any> {
     let postUrl = '';
     try {
+      this.logger.log(`checkAndSendRepairRequest: START for ticket ${ticketId}`);
       const ticket = await this.subTaskRepository.findOne({
         where: { id: ticketId },
         relations: ['ticketCategory', 'parent', 'parent.project'],
@@ -296,12 +318,16 @@ export class ComplaintSubTaskService extends AbstractService {
         return null;
       }
 
+      const categoryName = (ticket.ticketCategory?.category_name || '').trim();
+      this.logger.log(`checkAndSendRepairRequest: ticket=${ticket.ticket_number}, category="${categoryName}", repair_request_id=${ticket.repair_request_id}`);
+
       // ตรวจว่าหมวดหมู่เป็น "แจ้งซ่อม" และยังไม่เคยส่ง
-      if (ticket.ticketCategory?.category_name !== 'แจ้งซ่อม') {
+      if (categoryName !== 'แจ้งซ่อม') {
+        this.logger.log(`checkAndSendRepairRequest: skip - category is not "แจ้งซ่อม" (got "${categoryName}")`);
         return null;
       }
       if (ticket.repair_request_id) {
-        this.logger.log(`checkAndSendRepairRequest: ticket ${ticketId} already sent (repair_request_id=${ticket.repair_request_id})`);
+        this.logger.log(`checkAndSendRepairRequest: skip - ticket ${ticketId} already sent (repair_request_id=${ticket.repair_request_id})`);
         return null;
       }
 

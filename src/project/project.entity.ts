@@ -27,6 +27,8 @@ export class Project {
   project_type: string;
   @Column({ default: false })
   is_managed: boolean;
+  @Column({ default: false })
+  is_sena: boolean;
   @Column({ nullable: true })
   remark: string;
   @CreateDateColumn()

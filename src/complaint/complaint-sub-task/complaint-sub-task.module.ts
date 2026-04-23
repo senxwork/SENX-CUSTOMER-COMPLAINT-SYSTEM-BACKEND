@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ComplaintSubTask } from './complaint-sub-task.entity';
 import { ComplaintSubTaskController } from './complaint-sub-task.controller';
 import { ComplaintSubTaskService } from './complaint-sub-task.service';
+import { TicketReminderService } from './ticket-reminder.service';
 import { Department } from '../departments/department.entity';
 import { ComplaintList } from '../complaint-list/complaint-list.entity';
 import { PublicTicketAccessModule } from '../public-ticket-access/public-ticket-access.module';
@@ -19,7 +20,7 @@ import { ActivityLogModule } from '../../activity-log/activity-log.module';
     ActivityLogModule,
   ],
   controllers: [ComplaintSubTaskController],
-  providers: [ComplaintSubTaskService],
+  providers: [ComplaintSubTaskService, TicketReminderService],
   exports: [ComplaintSubTaskService],
 })
 export class ComplaintSubTaskModule {}

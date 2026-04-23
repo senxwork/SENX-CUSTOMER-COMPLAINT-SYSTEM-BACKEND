@@ -1,0 +1,144 @@
+<!doctype html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+        table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+    </style>
+</head>
+
+<body style="margin: 0; padding: 0; background-color: #eef2f7; font-family: 'Sarabun', Tahoma, sans-serif; font-size: 14px; line-height: 1.6;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #eef2f7;">
+        <tr>
+            <td align="center" style="padding: 30px 10px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 600px; border-collapse: collapse;">
+
+                    <!-- Header (Warning Red) -->
+                    <tr>
+                        <td align="center" style="background-color: #dc2626; padding: 32px 40px 24px 40px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                <tr>
+                                    <td align="center" style="font-size: 11px; font-weight: 600; color: #fecaca; text-transform: uppercase; letter-spacing: 2px; padding-bottom: 6px;">
+                                        ⚠️ REMINDER / แจ้งเตือน
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td align="center" style="font-size: 22px; font-weight: 700; color: #ffffff; padding-bottom: 4px;">
+                                        Ticket ยังไม่ได้ดำเนินการ
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td align="center" style="font-size: 14px; color: #fecaca;">
+                                        มอบหมายไปแล้ว {{dataBody.hours_since_assigned}} ชั่วโมง
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td style="background-color: #ffffff; padding: 32px 40px;">
+                            <p style="margin: 0 0 16px; color: #1e293b; font-size: 15px;">
+                                เรียน คุณ <strong>{{dataBody.contact_name}}</strong>
+                            </p>
+                            <p style="margin: 0 0 20px; color: #475569;">
+                                ระบบตรวจพบว่า Ticket ต่อไปนี้ถูกมอบหมายให้หน่วยงาน <strong>{{dataBody.department_name}}</strong> ของท่านมาแล้ว <strong style="color:#dc2626;">{{dataBody.hours_since_assigned}} ชั่วโมง</strong> แต่ยังไม่มีการดำเนินการ กรุณาเข้าตรวจสอบและอัพเดตสถานะโดยเร็ว
+                            </p>
+
+                            <!-- Ticket Info Card -->
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin: 16px 0;">
+                                <tr>
+                                    <td style="padding: 16px 20px;">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #64748b; font-size: 13px; width: 40%;">เลขที่ Ticket</td>
+                                                <td style="padding: 6px 0; color: #1e293b; font-size: 14px; font-weight: 600;">{{dataBody.ticket_number}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #64748b; font-size: 13px;">หมวดหมู่</td>
+                                                <td style="padding: 6px 0; color: #1e293b; font-size: 14px;">{{dataBody.category}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #64748b; font-size: 13px;">โครงการ</td>
+                                                <td style="padding: 6px 0; color: #1e293b; font-size: 14px;">{{dataBody.project_name}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #64748b; font-size: 13px;">ลูกค้า</td>
+                                                <td style="padding: 6px 0; color: #1e293b; font-size: 14px;">{{dataBody.customer_name}} ({{dataBody.house_name}})</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #64748b; font-size: 13px;">มอบหมายเมื่อ</td>
+                                                <td style="padding: 6px 0; color: #1e293b; font-size: 14px;">{{dataBody.assigned_at}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #64748b; font-size: 13px;">ครบกำหนด</td>
+                                                <td style="padding: 6px 0; color: #dc2626; font-size: 14px; font-weight: 600;">{{dataBody.due_date}}</td>
+                                            </tr>
+                                            {{#if dataBody.urgent}}
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #64748b; font-size: 13px;">ความเร่งด่วน</td>
+                                                <td style="padding: 6px 0;">
+                                                    <span style="display: inline-block; padding: 3px 10px; background-color: #dc2626; color: #ffffff; font-size: 12px; font-weight: 600; border-radius: 4px;">⚡ ด่วน</span>
+                                                </td>
+                                            </tr>
+                                            {{/if}}
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Detail Box -->
+                            <div style="background-color: #f8fafc; border-left: 4px solid #dc2626; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">
+                                <div style="color: #64748b; font-size: 12px; margin-bottom: 4px;">รายละเอียด</div>
+                                <div style="color: #1e293b; font-size: 14px;">{{dataBody.ticket_detail}}</div>
+                            </div>
+
+                            <!-- CTA Button -->
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 24px 0 8px;">
+                                <tr>
+                                    <td align="center" style="padding: 4px 0 16px 0;">
+                                        <!--[if mso]>
+                                        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{dataBody.public_url}}" style="height:48px;v-text-anchor:middle;width:340px;" arcsize="8%" strokecolor="#dc2626" fillcolor="#dc2626">
+                                        <w:anchorlock/>
+                                        <center style="color:#ffffff;font-family:Tahoma,sans-serif;font-size:15px;font-weight:700;">
+                                        &#9654; &nbsp;ดูรายละเอียดและอัพเดต Ticket
+                                        </center>
+                                        </v:roundrect>
+                                        <![endif]-->
+                                        <!--[if !mso]><!-->
+                                        <a href="{{dataBody.public_url}}" target="_blank" style="display: inline-block; background-color: #dc2626; color: #ffffff; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-family: 'Sarabun', Tahoma, sans-serif; font-size: 15px; font-weight: 700; mso-hide: all;">&#9654; &nbsp;ดูรายละเอียดและอัพเดต Ticket</a>
+                                        <!--<![endif]-->
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td align="center" style="font-family: 'Sarabun', Tahoma, sans-serif; font-size: 12px; color: #94a3b8; padding-bottom: 8px;">
+                                        คลิกปุ่มด้านบนเพื่อดูและอัพเดต Ticket โดยไม่ต้องเข้าสู่ระบบ
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 20px 0 0; color: #94a3b8; font-size: 12px; text-align: center;">
+                                อีเมลนี้เป็นการแจ้งเตือนอัตโนมัติ หาก Ticket ได้รับการดำเนินการแล้วสามารถเพิกเฉยต่ออีเมลฉบับนี้
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #1e3a5f; padding: 20px 40px; text-align: center; color: #8badd4; font-size: 12px;">
+                            © SEN X Management — Customer Complaint Center
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
